@@ -1,5 +1,28 @@
 {
-    "name": "coversgift/facebook-pixel-capi",
+    "name": "codersgift/facebook-pixel-service",
+    "description": "A simple Laravel package to send server-side events to the Facebook Conversions API (CAPI).",
+    "keywords": [
+        "laravel",
+        "facebook",
+        "pixel",
+        "capi",
+        "conversions-api",
+        "server-side-events"
+    ],
+    "type": "library",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "CodersGift",
+            "email": "support@codersgift.com"
+        }
+    ],
+    "require": {
+        "php": "^8.1",
+        "illuminate/contracts": "^8.0|^9.0|^10.0|^11.0|^12.0",
+        "illuminate/http": "^8.0|^9.0|^10.0|^11.0|^12.0",
+        "illuminate/support": "^8.0|^9.0|^10.0|^11.0|^12.0"
+    },
     "autoload": {
         "psr-4": {
             "Codersgift\\FacebookPixelService\\": "src/"
@@ -14,5 +37,10 @@
                 "FacebookPixel": "Codersgift\\FacebookPixelService\\Facades\\FacebookPixel"
             }
         }
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true,
+    "config": {
+        "sort-packages": true
     }
 }
