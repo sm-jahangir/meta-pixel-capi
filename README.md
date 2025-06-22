@@ -107,31 +107,36 @@ Now, when the form is submitted, the `fbp` value will be available in your contr
 
 ### b. Sending an Event (Backend)
 
-To send an event, call the `sendEvent` method with an array of event data.
+To send an event, call the `sendPixelEvent` method with an array of event data.
 
 ```php
 use Codersgift\FacebookPixelService\Facades\FacebookPixel;
 
 // ... inside a controller method
 
+$eventId = uniqid();
+$eventTime = time();
+
 $eventData = [
     'event_name' => 'Purchase',
-    'event_time' => time(),
-    'event_id' => 'your_unique_event_id', // Crucial for deduplication
-    'userID' => (string) $user->id,
+    'event_time' => $eventTime,
+    'event_id' => $eventId, // ✅ Use same variable
+    'fbp' => $request->fbp,
+
+    'userID' => (string) $new_user->id,
     'phone' => $order->mobile,
     'email' => $order->email,
     'order_id' => (string) $order->id,
     'value' => $order->total,
     'currency' => 'BDT',
-    'fbp' => $request->fbp, // _fbp cookie value
-    'client_ip_address' => $request->ip(),
-    'client_user_agent' => $request->userAgent(),
-    'content_ids' => ['product_id_1', 'product_id_2'],
+    'client_ip_address' => getRealIP(),
+    'client_user_agent' => $agent->getUserAgent(),
+    'content_ids' => $order->orderItems->pluck('product_id')->map(fn ($id) => (string) $id)->toArray(),
     'content_type' => 'product',
 ];
 
-$response = FacebookPixel::sendEvent($eventData);
+$response = FacebookPixel::sendPixelEvent($eventData);
+
 ```
 
 ### Event Data Parameters
@@ -188,12 +193,12 @@ class OrderController extends Controller
             DB::commit();
 
             // --- Facebook CAPI Integration ---
-            $eventId = uniqid('server_', true);
+            $eventId = uniqid();
             $eventTime = time();
 
             $eventData = [ /* ... build the $eventData array as shown above ... */ ];
 
-            FacebookPixel::sendEvent($eventData);
+            FacebookPixel::sendPixelEvent($eventData);
 
             $productIds = json_encode($order->orderItems->pluck('product_id')->toArray());
             return view('frontend.landingpage.thank-you', compact('order', 'productIds', 'eventId', 'eventTime'));
@@ -215,23 +220,62 @@ To prevent duplicate event counting, you must send the **same `event_id`** from 
 {{-- ... your thank you page content ... --}}
 
 @push('scripts')
-<script>
-    // Ensure fbq is initialized before using it
-    if (typeof fbq === 'function') {
+    <script>
         fbq('track', 'Purchase', {
+            event_name: 'Purchase',
             value: {{ $order->total }},
             currency: 'BDT',
-            content_ids: {!! $productIds !!},
+            content_ids: {!! json_encode($order->orderItems->pluck('product_id')->map(fn($id) => (string) $id)) !!},
             content_type: 'product',
-            order_id: '{{ $order->id }}'
+            order_id: '{{ $order->id }}',
+            event_time: '{{ $eventTime }}',
+            event_id: '{{ $eventId }}' // সার্ভার থেকে আসা eventId (প্রোডাকশনে ভ্যালু থাকবে, অন্যথায় খালি স্ট্রিং)
         },
-        // This object is for event deduplication
         {
-            eventID: '{{ $eventId }}' // Pass the same event_id from the controller
+            eventID: '{{ $eventId }}' // ডিডুপ্লিকেশনের জন্য
         });
-    }
-</script>
+    </script>
 @endpush
 ```
+
+```blade
+{{-- ... resources/views/includes/facebook-pixels.blade.php ... --}}
+
+@if (env('FACEBOOK_DOMAIN_VERIFICATION'))
+        <meta name="facebook-domain-verification" content="{{ env('FACEBOOK_DOMAIN_VERIFICATION') }}" />
+@endif
+
+@if (env('FACEBOOK_PIXEL_ID'))
+        <!-- Facebook Meta Pixel Code -->
+        <script>
+                !function(f,b,e,v,n,t,s)
+                {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+                n.callMethod.apply(n,arguments):n.queue.push(arguments)};
+                if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
+                n.queue=[];t=b.createElement(e);t.async=!0;
+                t.src=v;s=b.getElementsByTagName(e)[0];
+                s.parentNode.insertBefore(t,s)}(window, document,'script',
+                'https://connect.facebook.net/en_US/fbevents.js');
+                fbq('init', '{{ env('FACEBOOK_PIXEL_ID') }}');
+                fbq('track', 'PageView');
+        </script>
+        <noscript>
+        <img height="1" width="1" style="display:none"
+                src="https://www.facebook.com/tr?id={{ env('FACEBOOK_PIXEL_ID') }}&ev=PageView&noscript=1"/>
+        </noscript>
+        <!-- End Meta Pixel Code -->
+@endif
+
+```
+
+```blade
+{{-- ... resources/views/layouts/app.blade.php - In the header ... --}}
+
+
+    @include('includes.facebook-pixels')
+
+```
+
+
 
 This setup ensures that Facebook receives both events but understands they represent the same purchase, correctly deduplicating them in your Events Manager.
